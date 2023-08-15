@@ -1,0 +1,378 @@
+************************************TIE2*************************************
+**************************David Ricardo y Yuri Solari*************************
+***Obtener ingreso por distrito
+
+clear all
+cd "C:\Users\davidricardo\OneDrive - UDEP\UDEP\2023\TIE\Final"
+use enaho01a-2020-500.dta
+keep ubigeo p524a1 p523 conglome vivienda hogar codperso
+gen sal_anual=.
+replace sal_anual=260*p524a1 if p523==1 
+replace sal_anual=52*p524a1 if p523==2
+replace sal_anual=24*p524a1 if p523==3
+replace sal_anual=12*p524a1 if p523==4
+gen year = 2020
+egen id = concat(vivienda hogar)
+collapse (sum) sal_anual, by(id ubigeo year)
+collapse sal_anual, by(ubigeo year)
+save 2020.dta, replace
+
+clear
+use enaho01a-2021-500.dta
+keep ubigeo p524a1 p523 conglome vivienda hogar codperso
+gen sal_anual=.
+replace sal_anual=260*p524a1 if p523==1 
+replace sal_anual=52*p524a1 if p523==2
+replace sal_anual=24*p524a1 if p523==3
+replace sal_anual=12*p524a1 if p523==4
+gen year = 2021
+egen id = concat(vivienda hogar)
+collapse (sum) sal_anual, by(id ubigeo year)
+collapse sal_anual, by(ubigeo year)
+save 2021.dta, replace
+
+clear
+use enaho01a-2022-500.dta
+keep ubigeo p524a1 p523 conglome vivienda hogar codperso
+gen sal_anual=.
+replace sal_anual=260*p524a1 if p523==1 
+replace sal_anual=52*p524a1 if p523==2
+replace sal_anual=24*p524a1 if p523==3
+replace sal_anual=12*p524a1 if p523==4
+gen year = 2022
+egen id = concat(vivienda hogar)
+collapse (sum) sal_anual, by(id ubigeo year)
+collapse sal_anual, by(ubigeo year)
+save 2022.dta, replace
+
+clear
+use 2020.dta 
+append using 2021
+append using 2022
+duplicates examples
+duplicates drop year ubigeo, force
+save ingreso.dta, replace
+
+***Añadir predial a ingreso
+clear
+cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+import excel predial.xlsx, firstrow
+save predial.dta, replace
+keep ubigeo rpc2022 rpc2021 rpc2020 distrito 
+*tostring year, replace
+reshape long rpc, i(ubigeo) j(year)
+duplicates drop
+merge 1:m ubigeo year using ingreso.dta
+drop if _merge==2
+drop _merge 
+gen primera=substr(distrito,1,3)
+replace distrito="BRENA" if primera=="BRE"
+replace distrito="MAGDALENA" if primera=="MAG"
+drop primera ubigeo 
+egen msal=mean(sal_anual), by(distrito)
+replace sal_anual=msal
+drop msal 
+save ingreso.dta, replace
+
+***Base de cantidad en cada distrito
+clear
+import excel cantidades.xlsx, firstrow
+rename AÑO year
+rename MES month
+rename Distrito distrito
+replace month="1" if month=="ENERO"
+replace month="2" if month=="FEBRERO"
+replace month="3" if month=="MARZO"
+replace month="4" if month=="ABRIL"
+replace month="5" if month=="MAYO"
+replace month="6" if month=="JUNIO"
+replace month="7" if month=="JULIO"
+replace month="8" if month=="AGOSTO"
+replace month="9" if month=="SEPTIEMBRE"
+replace month="10" if month=="OCTUBRE"
+replace month="11" if month=="NOVIEMBRE"
+replace month="12" if month=="DICIEMBRE"
+drop GLPAutomotriz
+reshape long Gasohol, i(year month distrito) j(producto)
+rename Gasohol cantidad
+gen primera=substr(distrito,1,3)
+replace distrito="BRENA" if primera=="BRE"
+replace distrito="MAGDALENA" if primera=="MAG"
+replace month="5" if month=="MAYO "
+destring producto, replace
+destring month, replace
+keep if producto==90 | producto==95 
+drop primera
+drop if distrito=="ASIA" | distrito=="AUCALLAMA" | distrito=="BARRANCA" | distrito=="CANTA" | distrito=="CERRO AZUL" | distrito=="AUCALLAMA" | distrito=="CHANCAY" | distrito=="CHILCA" | distrito=="CUENCA" | distrito=="HUACHO" | distrito=="HUALMAY" | distrito=="HUARAL" | distrito=="HUAURA" | distrito=="IMPERIAL" | distrito=="LUNAHUANA" | distrito=="MALA" | distrito=="MATUCANA" | distrito=="NUEVO IMPERIAL" | distrito=="OYON" | distrito=="PARAMONGA" | distrito=="PATIVILCA" | distrito=="QUILMANA" | distrito=="RICARDO PALMA" | distrito=="SAN ANTONIO" | distrito=="SAN MATEO" | distrito=="SAN VICENTE DE CAÑETE" | distrito=="SANTA CRUZ DE COCACHACRA" | distrito=="SANTA EULALIA" | distrito=="SANTA MARIA" | distrito=="SANTA ROSA DE QUIVES" | distrito=="SANTO DOMINGO DE LOS OLLEROS" | distrito=="SAYAN" | distrito=="SUPE" | distrito=="VEGUETA" | distrito=="SUPE PUERTO" | distrito=="MI PERU"
+drop if distrito=="Ml PERU"
+drop if distrito=="PUNTA HERMOSA"
+drop if distrito=="PUNTA NEGRA"
+drop if distrito=="SANTA MARIA DEL MAR"
+drop if distrito=="CARMEN DE LA LEGUA REYNOSO"
+drop if year==2019
+drop if year==2020 & month==1
+drop if year==2020 & month==2
+save cantidades, replace
+
+***Deflactor del petróleo nacional
+clear
+cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+import excel ipc2021.xlsx, firstrow
+save ipcperu.dta, replace
+
+***Deflactor del petróleo crudo
+clear
+cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+import excel cpi_eeuu.xlsx, firstrow
+save ipcint.dta, replace
+
+***Precios del petróleo crudo
+clear
+cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+import excel Brent.xlsx, firstrow
+gen year = substr(Date,7,4) 
+gen month = substr(Date,1,2) 
+destring year, replace
+destring month, replace
+drop Date g90 g95
+
+merge 1:1 year month using ipcint.dta
+*drop if _merge==1
+drop _merge  
+
+gen brent_def = (Brent/ipcint)*100
+drop Brent 
+rename brent_def Brent
+
+gen lag1 = Brent[_n-1]
+gen lag2 = Brent[_n-2]
+gen lag3 = Brent[_n-3]
+gen lag4 = Brent[_n-4]
+gen lag5 = Brent[_n-5]
+gen lag6 = Brent[_n-6]
+gen lag7 = Brent[_n-7]
+gen lag8 = Brent[_n-8]
+gen lag9 = Brent[_n-9]
+gen lag10 = Brent[_n-10]
+gen lag11 = Brent[_n-11]
+gen lag12 = Brent[_n-12]
+
+gen llag1=ln(lag1)
+gen llag2=ln(lag2)
+gen llag3=ln(lag3)
+gen llag4=ln(lag4)
+gen llag5=ln(lag5)
+gen llag6=ln(lag6)
+gen llag7=ln(lag7)
+gen llag8=ln(lag8)
+gen llag9=ln(lag9)
+gen llag10=ln(lag10)
+gen llag11=ln(lag11)
+gen llag12=ln(lag12)
+
+drop if year==2019
+drop if year==2020 & month==1
+drop if year==2020 & month==2
+
+save Brent.dta, replace
+
+***Pampilla
+*clear
+*cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+*import excel Pampilla.xlsx, firstrow
+*save Pampilla.dta, replace
+
+***Base completa
+clear all
+cd "C:\Users\dipa_\OneDrive - UDEP\UDEP\2023\TIE\Final"
+use BD_grifos3.dta
+
+*1. Identificador de cada grifo
+*egen id=group(COORDENADAS3)
+
+*2. Año
+gen year = substr(MESA_O,1,4) 
+destring, replace 
+
+*3. Mes
+gen month = substr(MESA_O,6,.) 
+
+*4. Drop variables que no necesitamos
+drop DEPARTAMENTO 
+drop COORDENADAS3 
+
+*5. Renombrar variables
+rename MESA_O my
+rename PRECIO_DE_VENTA__SOLES_ precio
+rename DISTRITO distrito
+rename PROVINCIA provincia
+rename PRODUCTO producto
+rename index id
+
+*6. Creación de variables de coordenadas 
+*split coordenadas, p(", ")
+*gen latitud = substr(coordenadas1,2,.) 
+*gen longitud = substr(coordenadas2, 1, length(coordenadas2) - 1)
+*drop coordenadas1 coordenadas2
+*destring latitud longitud, replace
+
+*geonear id latitud longitud using Pampilla, neighbors(id latitud longitud)
+
+*7. Corrección de variables con errores
+gen primera=substr(distrito,1,3)
+replace distrito="BRENA" if primera=="BRE"
+replace distrito="MAGDALENA" if primera=="MAG"
+replace month="5" if month=="MAYO " 
+drop primera
+
+*8. Creación de variables instrumentales
+*egen mbuffer1 = mean(buffer1), by(distrito)
+egen mbuffer = mean(buffer2), by(distrito)
+*egen mbuffer3 = mean(buffer3), by(distrito)
+*egen dist = mean(km_to_nid), by(distrito)
+
+*9. Precio y precio deflactado  
+destring month, replace
+merge m:1 year month using ipcperu.dta 
+drop if _merge==2
+drop _merge 
+gen pre_def=(precio/ipc_2021)*100
+egen mpre_def = mean(pre_def), by(distrito year month producto)
+
+*10. Reconfigurar variable de producto
+replace producto="84" if producto=="GASOHOL 84 PLUS"
+replace producto="90" if producto=="GASOHOL 90 PLUS"
+replace producto="95" if producto=="GASOHOL 95 PLUS"
+replace producto="97" if producto=="GASOHOL 97 PLUS"
+replace producto="98" if producto=="GASOHOL 98 PLUS"
+destring producto, replace 
+keep if producto==90 | producto==95
+
+*11. Base a nivel distrito
+keep year month distrito producto mpre_def mbuffer
+duplicates drop 
+save preliminar, replace 
+
+*12. Añadir cantidad
+destring month, replace
+merge 1:1 year month distrito producto using cantidades.dta 
+keep if _merge==3
+drop _merge
+
+*13. Limpieza
+*Fuera de LMC
+drop if distrito=="ASIA" | distrito=="AUCALLAMA" | distrito=="BARRANCA" | distrito=="CANTA" | distrito=="CERRO AZUL" | distrito=="AUCALLAMA" | distrito=="CHANCAY" | distrito=="CHILCA" | distrito=="CUENCA" | distrito=="HUACHO" | distrito=="HUALMAY" | distrito=="HUARAL" | distrito=="HUAURA" | distrito=="IMPERIAL" | distrito=="LUNAHUANA" | distrito=="MALA" | distrito=="MATUCANA" | distrito=="NUEVO IMPERIAL" | distrito=="OYON" | distrito=="PARAMONGA" | distrito=="PATIVILCA" | distrito=="QUILMANA" | distrito=="RICARDO PALMA" | distrito=="SAN ANTONIO" | distrito=="SAN MATEO" | distrito=="SAN VICENTE DE CAÑETE" | distrito=="SANTA CRUZ DE COCACHACRA" | distrito=="SANTA EULALIA" | distrito=="SANTA MARIA" | distrito=="SANTA ROSA DE QUIVES" | distrito=="SANTO DOMINGO DE LOS OLLEROS" | distrito=="SAYAN" | distrito=="SUPE" | distrito=="VEGUETA" | distrito=="SUPE PUERTO"  
+
+*En LMC pero con muchos missings 
+drop if distrito=="MI PERU"
+drop if distrito=="Ml PERU"
+drop if distrito=="PUNTA HERMOSA"
+drop if distrito=="PUNTA NEGRA"
+drop if distrito=="SANTA MARIA DEL MAR"
+drop if distrito=="CARMEN DE LA LEGUA REYNOSO"
+
+*Fuera del periodo observado
+drop if year==2019
+drop if year==2020 & month==1
+drop if year==2020 & month==2
+
+*14. Añadir Brent 
+merge m:1 year month using Brent.dta
+drop if year==2019
+drop if year==2020 & month==1
+drop if year==2020 & month==2
+drop _merge
+
+*15. Creación de variables logarítmicas
+replace cantidad=1 if cantidad==.
+gen lcantidad=ln(cantidad)
+gen lprecio=ln(mpre_def)
+
+keep year month distrito producto lcantidad lprecio mbuffer llag* cantidad mpre_def  lag*
+sort year month distrito producto 
+
+*16. Añadir ingreso y predial
+merge m:1 year distrito using ingreso.dta 
+drop if _merge==2
+drop _merge
+gen lsal=ln(sal_anual)
+save final, replace
+
+*17. Creación de dos bases separadas
+keep if producto==90
+save 90.dta, replace
+
+clear
+use final
+keep if producto==95
+save 95.dta, replace 
+
+*18. Probar robustez (90) // Elegir instrumento // Correr regresión
+clear
+use 90 
+
+*ivregress 2sls lcantidad (lprecio=llag1), first
+*p value: 0
+*R cuadrado: 0.1455
+
+*ivregress 2sls lcantidad (lprecio=llag2), first
+*p value: 0
+*R cuadrado: 0.1494
+
+*ivregress 2sls lcantidad (lprecio=llag3), first
+*p value: 0
+*R cuadrado: 0.1390
+
+*ivregress 2sls lcantidad (lprecio=llag4), first
+*p value: 0
+*R cuadrado: 0.1106
+
+*ivregress 2sls lcantidad (lprecio=llag5), first
+*p value: 0
+*R cuadrado: 0.0841
+
+*Elección final: llag2
+
+gen bartik=mbuffer*llag2
+ivregress 2sls lcantidad lsal (lprecio=bartik), first
+
+*19. Probar robustez (95)
+clear
+use 95 
+
+*ivregress 2sls lcantidad (lprecio=llag1), first
+*p value: 0
+*R cuadrado:  0.0050
+
+*ivregress 2sls lcantidad (lprecio=llag2), first
+*p value: 0
+*R cuadrado: 0.0085
+
+*ivregress 2sls lcantidad (lprecio=llag3), first
+*p value: 0
+*R cuadrado: 0.0110
+
+*ivregress 2sls lcantidad (lprecio=llag4), first
+*p value: 0
+*R cuadrado: 0.0078
+
+*ivregress 2sls lcantidad (lprecio=llag5), first
+*p value: 0
+*R cuadrado: 0.0040
+
+*Elección final: llag3
+
+gen bartik=mbuffer*llag3
+ivregress 2sls lcantidad lsal (lprecio=bartik), first
+
+
+
+
+************
+*Ver qué lag se ajusta mejor
+reg lpre_def lsal lag1, ols
+
+ivregress 2sls lcantidad (lprecio=lag2 mbuffer2)
+estat firststage 
+estat overid
+esttab, cells("mean") row(lprecio) column(lcantidad) label nonumber noobs booktabs
