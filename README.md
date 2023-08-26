@@ -1,4 +1,4 @@
-# Bartik aproach: Price elasticity of demand for gasoholes in LMC
+# Bartik approach: Price elasticity of demand for gasoholes in LMC
 
 Our research explores the price elasticity of demand for G90 and G95 gasoholes in LMC, that is, we analize how consumers respond to price changes and tax policies. To address endogeneity challenges, we use a new instrumental variables approach called Bartik, or Shift Share.
 
